@@ -138,28 +138,61 @@ public bool IsRespawning { get; set; } = false;
             // get a reference to our main camera
             if (_mainCamera == null)
             {
+                // try tag first, then Camera.main as a fallback
                 _mainCamera = GameObject.FindGameObjectWithTag("MainCamera");
+                if (_mainCamera == null && Camera.main != null)
+                {
+                    _mainCamera = Camera.main.gameObject;
+                }
             }
         }
 
         private void Start()
 {
-    _cinemachineTargetYaw = CinemachineCameraTarget.transform.rotation.eulerAngles.y;
+#if ENABLE_INPUT_SYSTEM 
+    _playerInput = GetComponent<PlayerInput>();
+#else
+    Debug.LogError("Starter Assets package is missing dependencies. Please use Tools/Starter Assets/Reinstall Dependencies to fix it");
+#endif
+
+    // ensure CinemachineCameraTarget and main camera references are valid before using them
+    if (CinemachineCameraTarget == null)
+    {
+        // fallback to main camera if Cinemachine target wasn't set in inspector
+        if (_mainCamera == null && Camera.main != null) _mainCamera = Camera.main.gameObject;
+        CinemachineCameraTarget = _mainCamera;
+        if (CinemachineCameraTarget == null)
+        {
+            Debug.LogWarning("CinemachineCameraTarget and MainCamera are both null on ThirdPersonController. Camera rotation will be limited.");
+        }
+    }
+
+    if (CinemachineCameraTarget != null)
+    {
+        _cinemachineTargetYaw = CinemachineCameraTarget.transform.rotation.eulerAngles.y;
+    }
 
     _hasAnimator = TryGetComponent(out _animator);
     _controller = GetComponent<CharacterController>();
     _input = GetComponent<StarterAssetsInputs>();
-#if ENABLE_INPUT_SYSTEM 
-    _playerInput = GetComponent<PlayerInput>();
-#else
-	Debug.LogError("Starter Assets package is missing dependencies. Please use Tools/Starter Assets/Reinstall Dependencies to fix it");
-#endif
-    
+    // fallback: try to find StarterAssetsInputs in children if not on same GameObject
+    if (_input == null)
+    {
+        _input = GetComponentInChildren<StarterAssetsInputs>();
+        if (_input == null)
+        {
+            Debug.LogWarning("StarterAssetsInputs component not found on player. Movement input will be disabled until StarterAssetsInputs is added.");
+        }
+    }
+
     AssignAnimationIDs();
 
-    // Save the starting camera position and rotation
-    _cameraStartingPosition = CinemachineCameraTarget.transform.position;
-    _cameraStartingRotation = CinemachineCameraTarget.transform.rotation;
+    // Save the starting camera position and rotation (guarded)
+    if (CinemachineCameraTarget != null)
+    {
+        _cameraStartingPosition = CinemachineCameraTarget.transform.position;
+        _cameraStartingRotation = CinemachineCameraTarget.transform.rotation;
+    }
 
     // reset our timeouts on start
     _jumpTimeoutDelta = JumpTimeout;
@@ -213,15 +246,18 @@ public bool IsRespawning { get; set; } = false;
         _cinemachineTargetPitch = 0f;
 
         // Reset Cinemachine Camera Target to its starting state
-        CinemachineCameraTarget.transform.position = _cameraStartingPosition;
-        CinemachineCameraTarget.transform.rotation = _cameraStartingRotation;
+        if (CinemachineCameraTarget != null)
+        {
+            CinemachineCameraTarget.transform.position = _cameraStartingPosition;
+            CinemachineCameraTarget.transform.rotation = _cameraStartingRotation;
+        }
 
         IsRespawning = false; // Reset the respawning flag
         return;
     }
 
     // if there is an input and camera position is not fixed
-    if (_input.look.sqrMagnitude >= _threshold && !LockCameraPosition)
+    if (_input != null && _input.look.sqrMagnitude >= _threshold && !LockCameraPosition)
     {
         float deltaTimeMultiplier = IsCurrentDeviceMouse ? 1.0f : Time.deltaTime;
 
@@ -232,15 +268,39 @@ public bool IsRespawning { get; set; } = false;
     _cinemachineTargetYaw = ClampAngle(_cinemachineTargetYaw, float.MinValue, float.MaxValue);
     _cinemachineTargetPitch = ClampAngle(_cinemachineTargetPitch, BottomClamp, TopClamp);
 
-    CinemachineCameraTarget.transform.rotation = Quaternion.Euler(
-        _cinemachineTargetPitch + CameraAngleOverride,
-        _cinemachineTargetYaw,
-        0.0f
-    );
+    if (CinemachineCameraTarget != null)
+    {
+        CinemachineCameraTarget.transform.rotation = Quaternion.Euler(
+            _cinemachineTargetPitch + CameraAngleOverride,
+            _cinemachineTargetYaw,
+            0.0f
+        );
+    }
 }
 
         private void Move()
         {
+            // guard: if input or controller is missing, skip movement to avoid exceptions
+            if (_input == null)
+            {
+                return;
+            }
+
+            if (_controller == null)
+            {
+                _controller = GetComponent<CharacterController>();
+                if (_controller == null)
+                {
+                    Debug.LogWarning("CharacterController component missing on player. Movement disabled.");
+                    return;
+                }
+            }
+
+            if (_mainCamera == null && Camera.main != null)
+            {
+                _mainCamera = Camera.main.gameObject;
+            }
+
             // set target speed based on move speed, sprint speed and if sprint is pressed
             float targetSpeed = _input.sprint ? SprintSpeed : MoveSpeed;
 
@@ -423,7 +483,10 @@ public bool IsRespawning { get; set; } = false;
     _cinemachineTargetPitch = 0f;
 
     // Reset the camera target's rotation explicitly
-    CinemachineCameraTarget.transform.rotation = Quaternion.Euler(_cinemachineTargetPitch, _cinemachineTargetYaw, 0f);
+    if (CinemachineCameraTarget != null)
+    {
+        CinemachineCameraTarget.transform.rotation = Quaternion.Euler(_cinemachineTargetPitch, _cinemachineTargetYaw, 0f);
+    }
 
     Debug.Log($"Camera Yaw reset to {targetYaw} degrees.");
 }
