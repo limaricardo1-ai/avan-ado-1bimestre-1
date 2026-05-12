@@ -9,7 +9,7 @@ EditorBuildSettings:
     path: Assets/Scenes/_Boot.unity
     guid: 6547fc0f056e85d45b263d281e5ae7d2
   - enabled: 1
-    path: Assets/Scenes/Cena_Splash.unity
+    path: Assets/Scenes/cenaSplash.unity
     guid: 45d920f6a04e5054ab104ba3cac78c21
   - enabled: 1
     path: Assets/Scenes/MenuPrincipal.unity

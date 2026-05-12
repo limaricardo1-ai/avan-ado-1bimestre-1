@@ -3,12 +3,8 @@ using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem;
 using System.Collections;
 
-
-
-
 public class GameManager : MonoBehaviour
 {
-    // 1. Enum com os estados solicitados
     public enum GameState
     {
         Iniciando,
@@ -16,116 +12,213 @@ public class GameManager : MonoBehaviour
         Gameplay
     }
 
-    // 2. Implementação Singleton
     public static GameManager Instance { get; private set; }
 
-    [Header("Configurações")]
+    [Header("Configurações de Cenas")]
+    [SerializeField] private string cenaSplash = "CenaSplash";
+    [SerializeField] private string cenaMenu = "MenuPrincipal";
+    [SerializeField] private string cenaGameplay = "GetStarted_Scene";
+
+    [Header("Status")]
     public GameState estadoAtual;
-    
-    // Referência para o Player que será buscado na cena de Gameplay
+
     private PlayerInput _playerInputNaCena;
-    #region Singleton
+
     private void Awake()
+    {
+        ConfigurarSingleton();
+
+        // Sempre começa como Iniciando
+        estadoAtual = GameState.Iniciando;
+        Debug.Log($"<color=cyan>[GameManager]</color> Estado inicial forçado: <b>{estadoAtual}</b>");
+
+        SceneManager.sceneLoaded += OnSceneLoaded_General;
+        GarantirAudioListenerUnico();
+    }
+
+    private void OnDestroy()
+    {
+        // Limpar inscrição para evitar leaks
+        SceneManager.sceneLoaded -= OnSceneLoaded_General;
+    }
+
+    private void Start()
+    {
+        // Garante que o jogo comece carregando a primeira cena lógica (se essa for a intenção do projeto)
+        CarregarCena(cenaSplash);
+    }
+
+    private void ConfigurarSingleton()
     {
         if (Instance != null && Instance != this)
         {
-            Debug.Log("Destruindo instância duplicada do GameManager.");
-            Destroy(this.gameObject); 
-            return; // IMPORTANTE: Impede que o resto do código rode no objeto que vai morrer
+            Destroy(gameObject);
+            return;
         }
 
         Instance = this;
-        DontDestroyOnLoad(this.gameObject);
-    }
-    #endregion
-    private void Start()
-    {
-        // Como estamos na _Boot, vamos para a Splash automaticamente
-        CarregarCena("Cena_Splash");
+        DontDestroyOnLoad(gameObject);
     }
 
-    // 3. Gerenciamento de Estados com Debug.Log
-    public void MudarEstado(GameState novoEstado)
+    /// <summary>
+    /// Altera o estado lógico do jogo e dispara comportamentos específicos.
+    /// </summary>
+    public void TrocarEstado(GameState novoEstado)
     {
         if (estadoAtual == novoEstado) return;
 
         estadoAtual = novoEstado;
-        Debug.Log($"<color=cyan>[GameManager]</color> Estado: <b>{estadoAtual}</b>");
+        Debug.Log($"<color=cyan>[GameManager]</color> Novo Estado: <b>{estadoAtual}</b>");
 
         switch (estadoAtual)
         {
+            case GameState.Iniciando:
+                // Normalmente não há a necessidade de configurar nada aqui, pois a cena de splash é apenas um placeholder
+                break;
             case GameState.Gameplay:
-                // Verificação de segurança tripla antes de iniciar a Corrotina
-                if (this != null && gameObject.activeInHierarchy && this.enabled)
-                {
-                    StopAllCoroutines(); // Limpa corrotinas anteriores para evitar conflitos
-                    StartCoroutine(AlocarInputAposCarregamento());
-                }
-                else
-                {
-                    // Se ele estiver inativo agora, tentamos novamente em 0.1 segundos
-                    // O 'Invoke' funciona mesmo que o script esteja momentaneamente desativado
-                    Invoke(nameof(TentarReativarGameplay), 0.1f);
-                }
+                IniciarConfiguracaoGameplay();
+                break;
+            case GameState.MenuPrincipal:
+                Time.timeScale = 1f; // Garante que o jogo não esteja pausado no menu
                 break;
         }
     }
 
-    private void TentarReativarGameplay()
+    private void IniciarConfiguracaoGameplay()
     {
         if (gameObject.activeInHierarchy)
-            StartCoroutine(AlocarInputAposCarregamento());
+        {
+            StopAllCoroutines();
+            StartCoroutine(ConfigurarPlayerInputRoutine());
+        }
     }
 
-    // 4. Controle Único de Cenas
-    // Somente o GameManager acessa o SceneManager
-   public void CarregarCena(string nomeDaCena)
+    public void CarregarCena(string nomeDaCena)
     {
-        // Em vez de mudar o estado imediatamente, vamos usar um evento da Unity
-        // que avisa quando a cena terminou de carregar.
-        SceneManager.LoadScene(nomeDaCena);
-        
-        // Subscrevemos temporariamente a um evento da Unity
+        // Inscreve no evento antes de carregar
         SceneManager.sceneLoaded += AoTerminarDeCarregar;
+        SceneManager.LoadScene(nomeDaCena);
     }
 
     private void AoTerminarDeCarregar(Scene cena, LoadSceneMode modo)
     {
-        // 1. Removemos o evento para não disparar de novo na próxima cena
+        // Importante: Desinscrever sempre para evitar vazamento de memória
         SceneManager.sceneLoaded -= AoTerminarDeCarregar;
 
-        // 2. Agora que a cena carregou, mudamos o estado com segurança
-        if (cena.name == "Cena_MenuPrincipal") 
-            MudarEstado(GameState.MenuPrincipal);
-        else if (cena.name == "GetStarted_Scene") 
-            MudarEstado(GameState.Gameplay);
+        // Lógica de troca de estado baseada na cena carregada
+        if (cena.name == cenaSplash)
+            TrocarEstado(GameState.Iniciando);
+
+        if (cena.name == cenaMenu)
+            TrocarEstado(GameState.MenuPrincipal);
+        
     }
 
-    // 5. Alocação de Inputs (Input System)
-    private IEnumerator AlocarInputAposCarregamento()
+    // Handler geral para todas as cenas carregadas (não remove a inscrição)
+    private void OnSceneLoaded_General(Scene cena, LoadSceneMode modo)
     {
-        // Espera um frame para garantir que os objetos da cena foram instanciados
+        // Ajusta estado conforme a cena recém carregada (garante comportamento também quando a cena
+        // já estava aberta no editor ao pressionar Play)
+        AtualizarEstadoParaCena(cena.name);
+
+        // Garante que apenas 1 AudioListener esteja ativo após um carregamento de cena
+        GarantirAudioListenerUnico();
+    }
+
+    // Centraliza o mapeamento entre nome de cena e GameState
+    private void AtualizarEstadoParaCena(string nomeCena)
+    {
+        if (string.IsNullOrEmpty(nomeCena)) return;
+
+        if (nomeCena == cenaSplash)
+            TrocarEstado(GameState.Iniciando);
+        else if (nomeCena == cenaMenu)
+            TrocarEstado(GameState.MenuPrincipal);
+        else if (nomeCena == cenaGameplay)
+            TrocarEstado(GameState.Gameplay);
+    }
+
+    private IEnumerator ConfigurarPlayerInputRoutine()
+    {
+        // Espera o fim do frame para garantir que os objetos de Awake/Start da cena carregada rodaram
         yield return new WaitForEndOfFrame();
 
-        _playerInputNaCena = FindFirstObjectByType<PlayerInput>();
+        _playerInputNaCena = Object.FindFirstObjectByType<PlayerInput>();
 
         if (_playerInputNaCena != null)
         {
-            Debug.Log("<color=green>[GameManager]</color> Input alocado com sucesso ao Player.");
-            // Feijão com farinha 
-            // mas aqui você pode forçar esquemas de controle se necessário:
             _playerInputNaCena.ActivateInput();
+            Debug.Log("<color=green>[GameManager]</color> Controle do Jogador Ativado.");
         }
         else
         {
-            Debug.LogWarning("[GameManager] PlayerInput não encontrado na cena de Gameplay.");
+            Debug.LogWarning("[GameManager] PlayerInput não encontrado na cena atual.");
         }
     }
 
-    // Função para o botão Sair
+    // Garante que exista apenas 1 AudioListener ativo na cena; desativa os demais.
+    // Isso resolve o erro: "There are 2 audio listeners in the scene..."
+    private void GarantirAudioListenerUnico()
+    {
+        var listeners = FindObjectsOfType<AudioListener>();
+        if (listeners == null || listeners.Length <= 1) return;
+
+        // Tentaremos manter preferencialmente um AudioListener habilitado que esteja em uma Camera ativa.
+        AudioListener manter = null;
+
+        foreach (var l in listeners)
+        {
+            if (l == null) continue;
+            var cam = l.GetComponent<Camera>();
+            if (cam != null && cam.isActiveAndEnabled)
+            {
+                manter = l;
+                break;
+            }
+        }
+
+        if (manter == null)
+        {
+            // se não encontramos por câmera, pegamos o primeiro habilitado
+            foreach (var l in listeners)
+            {
+                if (l != null && l.enabled)
+                {
+                    manter = l;
+                    break;
+                }
+            }
+        }
+
+        if (manter == null)
+        {
+            // fallback: escolher o primeiro disponível
+            manter = listeners[0];
+        }
+
+        int desativados = 0;
+        foreach (var l in listeners)
+        {
+            if (l == null) continue;
+            if (l != manter && l.enabled)
+            {
+                l.enabled = false;
+                desativados++;
+            }
+        }
+
+        if (desativados > 0)
+        {
+            Debug.LogWarning($"[GameManager] Foram encontrados múltiplos AudioListeners. Desativei {desativados} deles para garantir exatamente 1 ativo. Mantido: {manter.gameObject.name}");
+        }
+    }
+
     public void SairDoJogo()
     {
-        Debug.Log("Saindo do jogo...");
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
         Application.Quit();
+#endif
     }
 }
