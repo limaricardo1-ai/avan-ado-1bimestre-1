@@ -430,19 +430,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 640377412}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 17936341769600358, guid: 56abaa0d5d6910349aa4625ea7126034, type: 3}
-        m_TargetAssemblyTypeName: GameManager, Assembly-CSharp
-        m_MethodName: SairDoJogo
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
+      m_Calls: []
 --- !u!114 &640377412
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1010,7 +998,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5db0335a8a0b5b478db6c6ec43639bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuManager
-  levelName: 
+  levelName: GetStarted_Scene
 --- !u!1 &2075357462
 GameObject:
   m_ObjectHideFlags: 0
