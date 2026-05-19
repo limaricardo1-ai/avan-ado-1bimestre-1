@@ -3,28 +3,14 @@ using UnityEngine.SceneManagement;
 
 public class MenuManager : MonoBehaviour
 {
-    [SerializeField] string levelName;
-      
-
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    public void CarregarCena(string nomeDaCena)
     {
-
+        GameManager.Instance.CarregarCena(nomeDaCena);
     }
 
-    // Update is called once per frame
-    void Update()
+    public void SairDoJogo()
     {
-
-    }
-
-    public void NewGame()
-    {
-        GameManager.Instance.CarregarCena(levelName);
-    }
-   
-    public void Exit()
-    {
-        GameManager.Instance.SairDoJogo();
+        Debug.Log("Saindo do jogo");
+        Application.Quit();
     }
 }
