@@ -18,6 +18,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private string cenaSplash = "CenaSplash";
     [SerializeField] private string cenaMenu = "MenuPrincipal";
     [SerializeField] private string cenaGameplay = "GetStarted_Scene";
+    [SerializeField] private string cenaGUI = "CenaGUI";
 
     [Header("Status")]
     public GameState estadoAtual;
@@ -90,6 +91,27 @@ public class GameManager : MonoBehaviour
         {
             StopAllCoroutines();
             StartCoroutine(ConfigurarPlayerInputRoutine());
+            StartCoroutine(ConfigurarGameplayRoutine());
+        }
+    }
+
+    private IEnumerator ConfigurarGameplayRoutine()
+    {
+        yield return new WaitForEndOfFrame();
+
+        // Carrega a CenaGUI de forma aditiva (se ainda não estiver carregada)
+        if (!IsSceneLoaded(cenaGUI))
+        {
+            Debug.Log($"<color=green>[GameManager]</color> Carregando CenaGUI de forma aditiva...");
+            SceneManager.LoadSceneAsync(cenaGUI, LoadSceneMode.Additive);
+        }
+
+        // Configura PlayerInput
+        _playerInputNaCena = Object.FindFirstObjectByType<PlayerInput>();
+        if (_playerInputNaCena != null)
+        {
+            _playerInputNaCena.ActivateInput();
+            Debug.Log("<color=green>[GameManager]</color> PlayerInput ativado.");
         }
     }
 
@@ -211,6 +233,16 @@ public class GameManager : MonoBehaviour
         {
             Debug.LogWarning($"[GameManager] Foram encontrados múltiplos AudioListeners. Desativei {desativados} deles para garantir exatamente 1 ativo. Mantido: {manter.gameObject.name}");
         }
+    }
+
+    private bool IsSceneLoaded(string sceneName)
+    {
+        for (int i = 0; i < SceneManager.sceneCount; i++)
+        {
+            if (SceneManager.GetSceneAt(i).name == sceneName)
+                return true;
+        }
+        return false;
     }
 
     public void SairDoJogo()
